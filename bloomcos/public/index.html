@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>BloomCOS – Cycle, PCOS & Pregnancy</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+:root{--bg:#fff5f8;--card:#fff;--ink:#3a2a35;--mut:#8a7482;--pri:#e8557f;--pri2:#f7c6d6;--lav:#ece4ff;--ok:#3aa675;--warn:#e29a2d;--bad:#d64550;--line:#f1dce4;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1d1520;--card:#2a1f2e;--ink:#f6e9ef;--mut:#b9a3b0;--pri:#ff7da1;--pri2:#5a2f42;--lav:#3a2f55;--line:#3d2d41}}
+html,body{height:100%;margin:0}body{background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;display:flex;justify-content:center}
+#app{width:100%;max-width:440px;display:flex;flex-direction:column;height:100%}
+main{flex:1;overflow-y:auto;padding:18px 16px 12px}
+h1{font-size:22px;margin:0 0 2px}h2{font-size:16px;margin:18px 0 8px}p{margin:4px 0;line-height:1.45}.mut{color:var(--mut);font-size:13px}
+.card{background:var(--card);border-radius:20px;padding:16px;margin:12px 0;box-shadow:0 2px 12px rgba(232,85,127,.08);border:1px solid var(--line)}
+.hero{background:linear-gradient(135deg,var(--pri),#b78bff);color:#fff;border:0}
+.row{display:flex;gap:10px;align-items:center;justify-content:space-between}
+button,.btn{background:var(--pri);color:#fff;border:0;border-radius:14px;padding:10px 16px;font-size:14px;font-weight:600;cursor:pointer}
+button.ghost{background:var(--lav);color:var(--ink)}
+input,select,textarea{width:100%;box-sizing:border-box;padding:10px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-size:14px}
+nav{display:flex;background:var(--card);border-top:1px solid var(--line);padding:6px 4px calc(6px + env(safe-area-inset-bottom,0px))}
+nav button{flex:1;background:none;color:var(--mut);font-size:11px;padding:6px 2px;border-radius:10px}nav button.on{color:var(--pri)}nav span{display:block;font-size:20px}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center}.cal div{padding:8px 0;border-radius:50%;font-size:13px;cursor:pointer}
+.cal .h{color:var(--mut);font-size:11px;cursor:default}.cal .p{background:var(--pri);color:#fff}.cal .f{background:var(--lav)}.cal .t{outline:2px solid var(--pri)}
+.bar{height:10px;background:var(--pri2);border-radius:9px;overflow:hidden}.bar i{display:block;height:100%;background:var(--pri)}
+.chip{display:inline-block;padding:7px 12px;margin:3px;border-radius:20px;background:var(--lav);font-size:13px;cursor:pointer}.chip.on{background:var(--pri);color:#fff}
+label.q{display:flex;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line);font-size:14px}label.q input{width:auto}
+.big{font-size:34px;font-weight:700}.tag{padding:4px 10px;border-radius:12px;font-size:12px;font-weight:700;color:#fff}
+</style></head><body><div id="app"><main id="m"></main>
+<nav id="n"></nav></div>
+<script>
+const K="bloomcos.v1";let S={periods:[],lmp:"",logs:{},kicks:0,pcos:{}};
+let T=localStorage.getItem("bc.t")||"",mode="login",err="",st;
+const E=()=>({periods:[],lmp:"",logs:{},kicks:0,pcos:{}});
+async function sha(t){const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(t));return[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("")}
+async function localApi(p,o){const U=JSON.parse(localStorage.getItem("bc.users")||"{}"),j=JSON.parse(o.body||"{}"),em=(j.email||"").trim().toLowerCase(),w=()=>localStorage.setItem("bc.users",JSON.stringify(U));
+ if(!U["demo@bloomcos.app"]){const d=n=>new Date(Date.now()-n*864e5).toISOString().slice(0,10);U["demo@bloomcos.app"]={name:"Demo",h:await sha("demo123"),data:{...E(),periods:[d(60),d(59),d(58),d(57),d(30),d(29),d(28),d(27)],lmp:d(100)}};w()}
+ if(p=="register"){if(!/^\S+@\S+\.\S+$/.test(em))throw new Error("Enter a valid email");if((j.password||"").length<6)throw new Error("Password must be at least 6 characters");if(U[em])throw new Error("Account already exists");U[em]={name:j.name||"",h:await sha(j.password),data:E()};w();return{token:"local:"+em,data:U[em].data}}
+ if(p=="login"){const x=U[em];if(!x||x.h!=await sha(j.password||""))throw new Error("Wrong email or password");return{token:"local:"+em,data:x.data}}
+ const e=T.slice(6);if(!U[e])throw new Error("Unauthorized");
+ if(p=="data"){if(o.method=="PUT"){U[e].data=JSON.parse(o.body);w();return{ok:true}}return U[e].data}
+ throw new Error("Not found")}
+const api=async(p,o={})=>{if(T.startsWith("local:"))return localApi(p,o);let r,j;try{r=await fetch("/api/"+p,{...o,headers:{"Content-Type":"application/json",Authorization:"Bearer "+T}});j=await r.json()}catch(e){return localApi(p,o)}if(!r.ok)throw new Error(j.error||"Error");return j};
+const save=()=>{if(!T)return;clearTimeout(st);st=setTimeout(()=>api("data",{method:"PUT",body:JSON.stringify(S)}).catch(e=>{if(/Unauthorized/.test(e.message))logout()}),400)};
+function authView(){document.getElementById("n").innerHTML="";document.getElementById("m").innerHTML=`<h1>BloomCOS 🌸</h1><p class="mut">Cycle, PCOS and pregnancy in one place</p><div class="card">${mode=="register"?'<input id="nm" placeholder="Name"><br><br>':""}<input id="em" type="email" placeholder="Email"><br><br><input id="pw" type="password" placeholder="Password (min 6)"><br><br><button onclick="auth()" style="width:100%">${mode=="login"?"Log in":"Create account"}</button><p style="color:var(--bad)">${err}</p><p class="mut">Demo: demo@bloomcos.app / demo123</p><p class="mut" style="cursor:pointer" onclick="mode=mode=='login'?'register':'login';err='';draw()">${mode=="login"?"New here? Create an account":"Have an account? Log in"}</p></div>`}
+async function auth(){try{const v=id=>document.getElementById(id)?.value||"";const j=await api(mode,{method:"POST",body:JSON.stringify({name:v("nm"),email:v("em"),password:v("pw")})});T=j.token;localStorage.setItem("bc.t",T);S={periods:[],lmp:"",logs:{},kicks:0,pcos:{},...j.data};err="";draw()}catch(e){err=e.message;draw()}}
+function logout(){T="";localStorage.removeItem("bc.t");S={periods:[],lmp:"",logs:{},kicks:0,pcos:{}};draw()}
+const iso=d=>d.toISOString().slice(0,10),D=s=>new Date(s+"T00:00:00Z"),day=864e5,today=iso(new Date());
+const diff=(a,b)=>Math.round((D(a)-D(b))/day);
+let tab="home",cm=new Date();cm.setUTCDate(1);
+function starts(){const p=[...S.periods].sort();return p.filter((d,i)=>!i||diff(d,p[i-1])>1)}
+function stats(){const s=starts(),L=s.slice(1).map((d,i)=>diff(d,s[i]));
+ const avg=L.length?Math.round(L.reduce((a,b)=>a+b)/L.length):28;
+ const sd=L.length>1?Math.sqrt(L.reduce((a,b)=>a+(b-avg)**2,0)/L.length):0;
+ return{s,L,avg,sd,last:s[s.length-1]}}
+function phase(){const{avg,last}=stats();if(!last)return null;const d=diff(today,last)+1;
+ const ph=d<=5?"Menstrual":d<avg-16?"Follicular":d<=avg-12?"Ovulation window":"Luteal";
+ return{d,ph,next:iso(new Date(D(last).getTime()+avg*day)),left:avg-d+1}}
+const sizes=[[4,"poppy seed"],[6,"lentil"],[8,"raspberry"],[10,"kumquat"],[12,"lime"],[14,"lemon"],[16,"avocado"],[18,"bell pepper"],[20,"banana"],[22,"papaya"],[24,"corn cob"],[26,"lettuce head"],[28,"eggplant"],[30,"cabbage"],[32,"squash"],[34,"cantaloupe"],[36,"honeydew"],[38,"watermelon"],[40,"pumpkin"]];
+const tips={1:"Start folic acid, book a first scan and avoid alcohol.",2:"Energy returns. Eat protein-rich meals, stay active, and keep up prenatal vitamins.",3:"Practise kick counts, plan your hospital bag and learn the signs of labour."};
+const Q=[["Irregular or missed periods",3],["Excess facial or body hair",2],["Persistent acne",1],["Scalp hair thinning",2],["Weight gain, especially around the waist",1],["Dark skin patches on neck or underarms",1],["Close relative with PCOS or diabetes",1],["Trouble conceiving",2]];
+const V={
+home(){const p=phase(),w=wk();return`<h1>Hello, beautiful ♡</h1><p class="mut">${new Date().toDateString()}</p>
+<div class="card hero">${w?`<p>Pregnancy · Week ${w.w}</p><div class="big">${w.left} days to go</div><p>Baby is the size of a ${w.size}</p>`:p?`<p>${p.ph} phase</p><div class="big">Day ${p.d}</div><p>Next period in about ${Math.max(p.left,0)} days (${p.next})</p>`:`<p>Welcome</p><div class="big">Start tracking</div><p>Log your last period to see predictions.</p>`}</div>
+<div class="row"><button onclick="go('cycle')">Log period</button><button class="ghost" onclick="go('pcos')">PCOS check</button><button class="ghost" onclick="go('preg')">Pregnancy</button></div>${ins()}<p style="text-align:center"><button class="ghost" onclick="logout()">Log out</button></p>`},
+cycle(){const y=cm.getUTCFullYear(),mo=cm.getUTCMonth(),first=cm.getUTCDay(),n=new Date(Date.UTC(y,mo+1,0)).getUTCDate(),st=stats(),ov=st.last?iso(new Date(D(st.last).getTime()+(st.avg-14)*day)):"";
+let h="";["S","M","T","W","T","F","S"].forEach(x=>h+=`<div class="h">${x}</div>`);for(let i=0;i<first;i++)h+="<div></div>";
+for(let d=1;d<=n;d++){const s=iso(new Date(Date.UTC(y,mo,d))),f=ov&&Math.abs(diff(s,ov))<=2;h+=`<div class="${S.periods.includes(s)?"p":f?"f":""} ${s==today?"t":""}" onclick="tp('${s}')">${d}</div>`}
+return`<h1>Cycle calendar</h1><div class="card"><div class="row"><button class="ghost" onclick="mv(-1)">‹</button><b>${cm.toLocaleString("en",{month:"long",year:"numeric",timeZone:"UTC"})}</b><button class="ghost" onclick="mv(1)">›</button></div><br><div class="cal">${h}</div><p class="mut">Tap days to mark period. Lavender = estimated fertile window.</p></div>
+<div class="card"><div class="row"><div><div class="mut">Avg cycle</div><b>${st.avg} days</b></div><div><div class="mut">Variation</div><b>±${st.sd.toFixed(1)}</b></div><div><div class="mut">Cycles logged</div><b>${st.L.length}</b></div></div></div>${ins()}`},
+pcos(){const sc=Q.reduce((a,[,w],i)=>a+(S.pcos[i]?w:0),0),st=stats(),au=st.L.length>1&&(st.avg>35||st.avg<21||st.sd>7),tot=sc+(au?2:0),lv=tot>=8?["High","var(--bad)"]:tot>=4?["Moderate","var(--warn)"]:["Low","var(--ok)"];
+return`<h1>PCOS screener</h1><p class="mut">Tick what applies to you.</p><div class="card">${Q.map(([t],i)=>`<label class="q"><input type="checkbox" ${S.pcos[i]?"checked":""} onchange="pc(${i},this.checked)">${t}</label>`).join("")}</div>
+<div class="card"><div class="row"><div><div class="mut">Symptom score</div><div class="big">${tot}</div></div><span class="tag" style="background:${lv[1]}">${lv[0]} likelihood</span></div>${au?`<p class="mut">Your logged cycles look irregular, which added 2 points.</p>`:""}
+<p class="mut">This is awareness, not a diagnosis. PCOS needs a doctor, usually with blood tests and an ultrasound.</p></div>
+<h2>Lifestyle plan</h2><div class="card"><p>• Low-glycaemic meals: whole grains, lentils, vegetables</p><p>• 150 min/week of movement, mixing walks and strength</p><p>• Sleep 7–9 hours and manage stress</p><p>• Track cycles and see a gynaecologist if periods stay irregular</p></div>`},
+preg(){const w=wk();return`<h1>Pregnancy tracker</h1><div class="card"><div class="mut">First day of last period</div><input type="date" value="${S.lmp}" max="${today}" onchange="S.lmp=this.value;save();draw()"></div>
+${w?`<div class="card hero"><p>Trimester ${w.tri}</p><div class="big">Week ${w.w}</div><p>Due ${w.due}</p><div class="bar" style="margin-top:10px"><i style="width:${Math.min(100,w.w/40*100)}%"></i></div></div>
+<div class="card"><b>Baby is the size of a ${w.size}</b><p>${tips[w.tri]}</p></div>
+<div class="card"><div class="row"><div><b>Kick counter</b><p class="mut">Aim for 10 movements in 2 hours</p></div><div class="big">${S.kicks}</div></div><br><div class="row"><button onclick="S.kicks++;save();draw()">+ Kick</button><button class="ghost" onclick="S.kicks=0;save();draw()">Reset</button></div></div>
+<div class="card" style="border-color:var(--bad)"><b>Seek care urgently for</b><p class="mut">Heavy bleeding, severe headache, blurred vision, reduced baby movement, fever or swelling of the face and hands.</p></div>`:`<p class="mut">Enter your date to see week, due date and baby size.</p>`}`},
+log(){const l=S.logs[today]||{s:[],mood:"",water:0,note:""};
+const mood=["😊","😐","😢","😠","😴"],sy=["Cramps","Bloating","Acne","Headache","Nausea","Fatigue","Back pain","Cravings"];
+return`<h1>Daily log</h1><div class="card"><b>Mood</b><br>${mood.map(m=>`<span class="chip ${l.mood==m?"on":""}" onclick="lg('mood','${m}')">${m}</span>`).join("")}<h2>Symptoms</h2>${sy.map(m=>`<span class="chip ${l.s.includes(m)?"on":""}" onclick="ls('${m}')">${m}</span>`).join("")}
+<h2>Water: ${l.water} glasses</h2><button class="ghost" onclick="lg('water',${l.water}+1)">+ Glass</button><h2>Note</h2><textarea rows="3" onchange="lg('note',this.value)">${l.note}</textarea></div>
+<h2>History</h2>${Object.entries(S.logs).sort().reverse().slice(0,7).map(([d,x])=>`<div class="card"><b>${d}</b> ${x.mood||""}<p class="mut">${x.s.join(", ")||"No symptoms"} · ${x.water} 💧</p></div>`).join("")||`<p class="mut">No entries yet.</p>`}`}};
+function ins(){const l=Object.values(S.logs).flatMap(x=>x.s),c={};l.forEach(x=>c[x]=(c[x]||0)+1);const t=Object.entries(c).sort((a,b)=>b[1]-a[1])[0];return t?`<div class="card"><b>Insight</b><p class="mut">Your most frequent symptom is ${t[0].toLowerCase()} (${t[1]} days).</p></div>`:""}
+function wk(){if(!S.lmp)return null;const d=diff(today,S.lmp),w=Math.floor(d/7);if(d<0||w>42)return null;
+ const size=(sizes.filter(x=>x[0]<=Math.max(w,4)).pop()||sizes[0])[1];return{w,tri:w<14?1:w<28?2:3,left:280-d,due:iso(new Date(D(S.lmp).getTime()+280*day)),size}}
+const go=t=>{tab=t;draw()},mv=n=>{cm.setUTCMonth(cm.getUTCMonth()+n);draw()};
+function tp(s){const i=S.periods.indexOf(s);i<0?S.periods.push(s):S.periods.splice(i,1);save();draw()}
+function pc(i,v){S.pcos[i]=v;save();draw()}
+function lg(k,v){const l=S.logs[today]||(S.logs[today]={s:[],mood:"",water:0,note:""});l[k]=v;save();draw()}
+function ls(m){const l=S.logs[today]||(S.logs[today]={s:[],mood:"",water:0,note:""}),i=l.s.indexOf(m);i<0?l.s.push(m):l.s.splice(i,1);save();draw()}
+function draw(){if(!T)return authView();const m=document.getElementById("m"),y=m.scrollTop;m.innerHTML=V[tab]();m.scrollTop=y;
+ document.getElementById("n").innerHTML=[["home","🏠","Home"],["cycle","📅","Cycle"],["pcos","🩺","PCOS"],["preg","🤰","Pregnancy"],["log","📝","Log"]].map(([k,i,t])=>`<button class="${tab==k?"on":""}" onclick="go('${k}')"><span>${i}</span>${t}</button>`).join("")}
+if(T)api("data").then(d=>{S={...S,...d};draw()}).catch(()=>{T="";draw()});else draw();
+</script></body></html>
